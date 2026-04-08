@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>採用メッセージ アーカイブ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#fafafa;color:#1a1a1a}
+input,select,textarea,button{font-family:inherit}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyvAmBjr-cp_F3hTTkeviJPJZdkqGVnV-Dx8pmxMU6BFGBWIUtbuGnfzktCNTGJWEhuEA/exec';
+
+const PHASE_ORDER = ["説明会案内","インターン案内","インターン直前","インターン中","インターン後フォロー","早期選考案内","選考前面談","リマインド","一次選考結果","二次選考結果","最終選考後","内定通知","内定後フォロー","内定承諾後","入社前フォロー"];
+const TAG_COLORS = ["#e8425a","#e86842","#e8a442","#5cb85c","#42a8e8","#7b5ea7","#e84295","#42c8c8","#a87b5e","#5e7ba8","#c8a842","#5ea87b","#a8425e","#427ba8","#7ba842"];
+function tagColor(tag) { let h=0; for(let i=0;i<tag.length;i++) h=(h*31+tag.charCodeAt(i))&0xffff; return TAG_COLORS[h%TAG_COLORS.length]; }
+
+const S = {
+  nav: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 24px", height:52, background:"#fff", borderBottom:"1px solid #ebebeb", position:"sticky", top:0, zIndex:50 },
+  logo: { fontSize:14, fontWeight:700, color:"#1a1a1a", letterSpacing:"-0.3px" },
+  searchWrap: { position:"relative", flex:"0 0 320px" },
+  searchInput: { width:"100%", padding:"8px 32px 8px 36px", border:"1px solid #e0e0e0", borderRadius:20, fontSize:13, background:"#f5f5f5", color:"#1a1a1a", outline:"none", boxSizing:"border-box" },
+  searchIcon: { position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:14, color:"#aaa", pointerEvents:"none" },
+  searchClear: { position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", fontSize:14, color:"#aaa", cursor:"pointer" },
+  addBtn: { background:"none", border:"1px solid #ddd", borderRadius:16, padding:"6px 14px", fontSize:12, color:"#555", cursor:"pointer", fontWeight:500 },
+  page: { maxWidth:680, margin:"0 auto", padding:"0 24px 48px" },
+};
+
+function NavBar({ q, onQ, onAdd }) {
+  return (
+    <div style={S.nav}>
+      <span style={S.logo}>採用メッセージ アーカイブ</span>
+      <div style={S.searchWrap}>
+        <span style={S.searchIcon}>🔍</span>
+        <input value={q} onChange={e => onQ(e.target.value)} placeholder="メッセージを検索" style={S.searchInput} />
+        {q && <button onClick={() => onQ("")} style={S.searchClear}>✕</button>}
+      </div>
+      <button onClick={onAdd} style={S.addBtn}>+ 追加</button>
+    </div>
+  );
+}
+
+function EmptyState({ q }) {
+  return (
+    <div style={{ textAlign:"center", padding:"60px 0 40px" }}>
+      <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ margin:"0 auto 20px", display:"block" }}>
+        <ellipse cx="80" cy="90" rx="55" ry="22" fill="#e8eaf6" opacity="0.7"/>
+        <path d="M55 85 Q65 60 80 55 Q95 50 108 62 Q118 72 112 82 Q106 92 90 95 Q74 98 62 90 Z" fill="#c5cae9" opacity="0.8"/>
+        <rect x="68" y="62" width="36" height="26" rx="3" fill="#fff" stroke="#9fa8da" strokeWidth="1.2"/>
+        <line x1="73" y1="70" x2="99" y2="70" stroke="#c5cae9" strokeWidth="1.2" strokeLinecap="round"/>
+        <line x1="73" y1="75" x2="95" y2="75" stroke="#c5cae9" strokeWidth="1.2" strokeLinecap="round"/>
+        <line x1="73" y1="80" x2="91" y2="80" stroke="#e8eaf6" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+      <div style={{ fontSize:14, color:"#555", marginBottom:6 }}>
+        <span style={{ fontWeight:600 }}>"{q}"</span>というメッセージは見つかりませんでした。
+      </div>
+      <div style={{ fontSize:12, color:"#aaa" }}>キーワードを変えて検索してみてください</div>
+    </div>
+  );
+}
+
+function CopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
+  return (
+    <button onClick={copy} style={{ display:"flex", alignItems:"center", gap:6, background: copied?"#e8f8ee":"#1a1a1a", color: copied?"#1a7a3a":"#fff", border:"none", borderRadius:6, padding:"8px 16px", fontSize:13, cursor:"pointer", fontWeight:600, transition:"all .2s" }}>
+      {copied ? "✓ コピーしました" : "📋 本文をコピー"}
+    </button>
+  );
+}
+
+function Spinner() {
+  return <div style={{ textAlign:"center", padding:60, color:"#aaa", fontSize:13 }}>読み込み中...</div>;
+}
+
+function App() {
+  const [view, setView] = useState("home");
+  const [q, setQ] = useState("");
+  const [activePh, setActivePh] = useState(null);
+  const [activeTag, setActiveTag] = useState(null);
+  const [sel, setSel] = useState(null);
+  const [showNote, setShowNote] = useState(true);
+  const [msgs, setMsgs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [f, setF] = useState({ phase:"", dir:"送信", ch:"LINE", date:"", subj:"", body:"", tags:"", note:"", good:"" });
+  const [error, setError] = useState(null);
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = () => {
+    setLoading(true);
+    setError(null);
+    fetch(GAS_URL)
+      .then(r => r.json())
+      .then(d => {
+        if (d.status === 'ok') {
+          setMsgs(d.data.map(m => ({
+            ...m,
+            subj: m.subject,
+            ch: m.channel,
+            dir: m.direction,
+            good: m.goodPoints || []
+          })));
+        }
+        setLoading(false);
+      })
+      .catch(e => { setError('データの読み込みに失敗しました。ページを再読み込みしてください。'); setLoading(false); });
+  };
+
+  const phaseCounts = useMemo(() => {
+    const c = {};
+    PHASE_ORDER.forEach(p => { c[p] = msgs.filter(m => m.phase === p).length; });
+    return c;
+  }, [msgs]);
+
+  const allTags = useMemo(() => [...new Set(msgs.flatMap(m => m.tags || []))], [msgs]);
+
+  const handleQ = (val) => {
+    setQ(val);
+    if (val.trim()) { setActivePh(null); setActiveTag(null); setView("results"); }
+    else if (view === "results") setView("home");
+  };
+  const handleTag = (tag) => { setActiveTag(tag); setActivePh(null); setQ(""); setView("results"); };
+  const handlePhase = (ph) => { setActivePh(ph); setActiveTag(null); setQ(""); setView("results"); };
+
+  const filtered = useMemo(() => msgs.filter(m => {
+    if (activePh && m.phase !== activePh) return false;
+    if (activeTag && !(m.tags||[]).includes(activeTag)) return false;
+    const lq = q.toLowerCase();
+    if (!lq) return true;
+    return (m.subj||"").toLowerCase().includes(lq) || (m.body||"").toLowerCase().includes(lq) ||
+      (m.note||"").toLowerCase().includes(lq) || (m.tags||[]).some(t => t.includes(lq)) || (m.phase||"").includes(lq);
+  }), [msgs, q, activePh, activeTag]);
+
+  const hl = (text) => {
+    if (!q) return text;
+    const parts = String(text).split(new RegExp("(" + q + ")", "gi"));
+    return parts.map((p, i) => p.toLowerCase() === q.toLowerCase() ? React.createElement('mark', { key:i, style:{ background:"#fff3cd", borderRadius:2, padding:"0 1px" } }, p) : p);
+  };
+
+  const openAdd = () => { setEditId(null); setF({ phase:"", dir:"送信", ch:"LINE", date:"", subj:"", body:"", tags:"", note:"", good:"" }); setModal(true); };
+  const openEdit = (m) => {
+    setEditId(m.id);
+    setF({ phase:m.phase||"", dir:m.dir||m.direction||"送信", ch:m.ch||m.channel||"LINE", date:m.date||"", subj:m.subj||m.subject||"", body:m.body||"", tags:(m.tags||[]).join("、"), note:m.note||"", good:(m.good||m.goodPoints||[]).join("、") });
+    setModal(true);
+  };
+
+  const saveFn = async () => {
+    if (!f.subj.trim()) { alert("件名を入力してください"); return; }
+    setSaving(true);
+    const entry = {
+      ...f,
+      subject: f.subj,
+      channel: f.ch,
+      direction: f.dir,
+      tags: f.tags.split(/[,、]/).map(s=>s.trim()).filter(Boolean),
+      goodPoints: f.good.split(/[,、]/).map(s=>s.trim()).filter(Boolean),
+      id: editId
+    };
+    const action = editId ? 'update' : 'add';
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, entry })
+      });
+      setModal(false);
+      setTimeout(() => { fetchData(); setSaving(false); }, 1500);
+    } catch(e) {
+      alert('保存に失敗しました。もう一度お試しください。');
+      setSaving(false);
+    }
+  };
+
+  const deleteFn = async (id) => {
+    if (!window.confirm('このメッセージを削除しますか？')) return;
+    setSaving(true);
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id })
+      });
+      setSel(null);
+      setTimeout(() => { fetchData(); setSaving(false); }, 1500);
+    } catch(e) {
+      alert('削除に失敗しました。');
+      setSaving(false);
+    }
+  };
+
+  const goHome = () => { setView("home"); setQ(""); setActivePh(null); setActiveTag(null); setSel(null); };
+
+  // DETAIL VIEW
+  if (sel) return (
+    <div style={{ fontFamily:"'Hiragino Kaku Gothic ProN','Meiryo',sans-serif", background:"#fafafa", minHeight:"100vh" }}>
+      <NavBar q={q} onQ={handleQ} onAdd={openAdd} />
+      <div style={{ ...S.page, paddingTop:28 }}>
+        <button onClick={() => setSel(null)} style={{ background:"none", border:"none", fontSize:13, color:"#888", cursor:"pointer", padding:"0 0 20px", display:"flex", alignItems:"center", gap:4 }}>‹ 戻る</button>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12, alignItems:"center" }}>
+          <span style={{ fontSize:11, color:"#888", background:"#f0f0f0", borderRadius:10, padding:"3px 10px" }}>{sel.phase}</span>
+          <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color: (sel.ch||sel.channel)==="LINE" ? "#06c755" : "#666" }}>
+            <span style={{ width:7, height:7, borderRadius:"50%", background:(sel.ch||sel.channel)==="LINE"?"#06c755":"#888", display:"inline-block" }}></span>
+            {sel.ch||sel.channel}
+          </span>
+          <span style={{ fontSize:11, color:"#aaa" }}>{sel.date}</span>
+        </div>
+        <h1 style={{ fontSize:20, fontWeight:600, color:"#1a1a1a", lineHeight:1.4, marginBottom:20 }}>{sel.subj||sel.subject}</h1>
+        <div style={{ background:"#fff", border:"1px solid #ebebeb", borderRadius:10, padding:"20px 22px", marginBottom:14 }}>
+          <pre style={{ fontSize:13, lineHeight:2, whiteSpace:"pre-wrap", wordBreak:"break-word", fontFamily:"inherit", color:"#2a2a2a", margin:0 }}>{hl(sel.body)}</pre>
+        </div>
+        <CopyBtn text={sel.body} />
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"16px 0" }}>
+          {(sel.tags||[]).map(t => (
+            <button key={t} onClick={() => { setSel(null); handleTag(t); }}
+              style={{ display:"flex", alignItems:"center", gap:5, background:"#fff", border:"1px solid #ebebeb", borderRadius:12, padding:"4px 10px", fontSize:11, color:"#444", cursor:"pointer" }}>
+              <span style={{ width:6, height:6, borderRadius:"50%", background:tagColor(t), display:"inline-block" }}></span>
+              {t}
+            </button>
+          ))}
+        </div>
+        {sel.note && (
+          <div style={{ marginTop:20 }}>
+            <button onClick={() => setShowNote(!showNote)} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", fontSize:12, color:"#888", padding:"4px 0", marginBottom: showNote?10:0 }}>
+              <span>💬</span> 担当者メモ <span style={{ fontSize:10 }}>{showNote?"▲":"▼"}</span>
+            </button>
+            {showNote && (
+              <div style={{ background:"#fffdf0", border:"1px solid #f0e8c0", borderLeft:"3px solid #e8c84a", borderRadius:8, padding:"14px 16px", fontSize:12, lineHeight:1.9, color:"#4a3a10" }}>{hl(sel.note)}</div>
+            )}
+          </div>
+        )}
+        {(sel.good||sel.goodPoints||[]).length > 0 && (
+          <div style={{ marginTop:16 }}>
+            <div style={{ fontSize:12, color:"#888", marginBottom:8 }}>✅ このメッセージの良いポイント</div>
+            <div style={{ background:"#f6fff6", border:"1px solid #d4edda", borderRadius:8, padding:"12px 16px" }}>
+              {(sel.good||sel.goodPoints||[]).map((p,i) => <div key={i} style={{ fontSize:12, color:"#2a4a2a", lineHeight:1.7, marginBottom: i<(sel.good||sel.goodPoints).length-1?4:0 }}>・{p}</div>)}
+            </div>
+          </div>
+        )}
+        <div style={{ marginTop:20, paddingTop:16, borderTop:"1px solid #ebebeb", display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={() => deleteFn(sel.id)} style={{ background:"none", border:"1px solid #ffcdd2", borderRadius:8, padding:"7px 16px", fontSize:12, color:"#e53935", cursor:"pointer" }}>削除</button>
+          <button onClick={() => openEdit(sel)} style={{ background:"none", border:"1px solid #ddd", borderRadius:8, padding:"7px 16px", fontSize:12, color:"#555", cursor:"pointer" }}>編集する</button>
+        </div>
+      </div>
+      {modal && <Modal f={f} setF={setF} editId={editId} onSave={saveFn} onClose={() => setModal(false)} saving={saving} />}
+    </div>
+  );
+
+  // RESULTS VIEW
+  if (view === "results") return (
+    <div style={{ fontFamily:"'Hiragino Kaku Gothic ProN','Meiryo',sans-serif", background:"#fafafa", minHeight:"100vh" }}>
+      <NavBar q={q} onQ={handleQ} onAdd={openAdd} />
+      <div style={{ ...S.page, paddingTop:28 }}>
+        <button onClick={goHome} style={{ background:"none", border:"none", fontSize:13, color:"#888", cursor:"pointer", padding:"0 0 20px", display:"flex", alignItems:"center", gap:4 }}>‹ 戻る</button>
+        <h2 style={{ fontSize:18, fontWeight:600, color:"#1a1a1a", marginBottom:20 }}>
+          "{q || activePh || (activeTag ? "#"+activeTag : "")}"の検索結果
+        </h2>
+        {loading ? <Spinner /> : filtered.length === 0 ? <EmptyState q={q || activePh || activeTag || ""} /> :
+          filtered.map(m => (
+            <div key={m.id} onClick={() => setSel(m)}
+              style={{ background:"#fff", border:"1px solid #ebebeb", borderRadius:10, padding:"16px 18px", marginBottom:10, cursor:"pointer" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow="0 2px 12px rgba(0,0,0,.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow="none"}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                <span style={{ fontSize:11, color:"#888", background:"#f5f5f5", borderRadius:10, padding:"2px 9px" }}>{m.phase}</span>
+                <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:(m.ch||m.channel)==="LINE"?"#06c755":"#888" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:(m.ch||m.channel)==="LINE"?"#06c755":"#aaa", display:"inline-block" }}></span>
+                  {m.ch||m.channel}
+                </span>
+                <span style={{ marginLeft:"auto", fontSize:11, color:"#bbb" }}>{m.date}</span>
+              </div>
+              <div style={{ fontSize:14, fontWeight:600, color:"#1a1a1a", lineHeight:1.5, marginBottom:8 }}>{hl(m.subj||m.subject)}</div>
+              <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                {(m.tags||[]).map(t => (
+                  <span key={t} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#666", cursor:"pointer" }}
+                    onClick={e => { e.stopPropagation(); handleTag(t); }}>
+                    <span style={{ width:6, height:6, borderRadius:"50%", background:tagColor(t), display:"inline-block" }}></span>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))
+        }
+      </div>
+      {modal && <Modal f={f} setF={setF} editId={editId} onSave={saveFn} onClose={() => setModal(false)} saving={saving} />}
+    </div>
+  );
+
+  // HOME VIEW
+  return (
+    <div style={{ fontFamily:"'Hiragino Kaku Gothic ProN','Meiryo',sans-serif", background:"#fafafa", minHeight:"100vh" }}>
+      <NavBar q={q} onQ={handleQ} onAdd={openAdd} />
+      <div style={{ ...S.page, paddingTop:36 }}>
+        {error && <div style={{ background:"#ffebee", border:"1px solid #ffcdd2", borderRadius:8, padding:"12px 16px", fontSize:13, color:"#c62828", marginBottom:20 }}>{error}</div>}
+        {loading ? <Spinner /> : (
+          <>
+            <div style={{ marginBottom:32 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:"#aaa", letterSpacing:1, marginBottom:12, textTransform:"uppercase" }}>フェーズ</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px,1fr))", gap:8 }}>
+                {PHASE_ORDER.filter(p => phaseCounts[p] > 0).map(p => (
+                  <button key={p} onClick={() => handlePhase(p)}
+                    style={{ padding:"14px", background:"#fff", border:"1px solid #ebebeb", borderRadius:10, cursor:"pointer", textAlign:"left" }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,.08)"; e.currentTarget.style.borderColor="#ccc"; }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#ebebeb"; }}>
+                    <div style={{ fontSize:13, fontWeight:500, color:"#1a1a1a", marginBottom:3 }}>{p}</div>
+                    <div style={{ fontSize:11, color:"#bbb" }}>{phaseCounts[p]}件</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:12, fontWeight:600, color:"#aaa", letterSpacing:1, marginBottom:12, textTransform:"uppercase" }}>タグ</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                {allTags.map(t => (
+                  <button key={t} onClick={() => handleTag(t)}
+                    style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", background:"#fff", border:"1px solid #ebebeb", borderRadius:16, fontSize:12, color:"#444", cursor:"pointer" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor="#ccc"; e.currentTarget.style.background="#fafafa"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor="#ebebeb"; e.currentTarget.style.background="#fff"; }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background:tagColor(t), display:"inline-block" }}></span>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      {modal && <Modal f={f} setF={setF} editId={editId} onSave={saveFn} onClose={() => setModal(false)} saving={saving} />}
+    </div>
+  );
+}
+
+function Modal({ f, setF, editId, onSave, onClose, saving }) {
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,.35)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}>
+      <div style={{ background:"#fff", borderRadius:12, width:"min(520px,94vw)", maxHeight:"90vh", overflowY:"auto", padding:24, boxShadow:"0 8px 40px rgba(0,0,0,.15)" }}>
+        <div style={{ fontSize:15, fontWeight:600, color:"#1a1a1a", marginBottom:18 }}>{editId ? "メッセージを編集" : "新規メッセージを追加"}</div>
+        {[["フェーズ","phase"],["日付","date"],["件名","subj"]].map(([label, key]) => (
+          <div key={key} style={{ marginBottom:12 }}>
+            <label style={{ display:"block", fontSize:11, color:"#888", marginBottom:4 }}>{label}</label>
+            <input value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))}
+              style={{ width:"100%", padding:"8px 10px", border:"1px solid #e0e0e0", borderRadius:7, fontSize:13, boxSizing:"border-box", outline:"none" }} />
+          </div>
+        ))}
+        <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+          {[["送受信","dir",["送信","受信"]],["媒体","ch",["LINE","メール","その他"]]].map(([label, key, opts]) => (
+            <div key={key} style={{ flex:1 }}>
+              <label style={{ display:"block", fontSize:11, color:"#888", marginBottom:4 }}>{label}</label>
+              <select value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))}
+                style={{ width:"100%", padding:"8px 10px", border:"1px solid #e0e0e0", borderRadius:7, fontSize:13, background:"#fff" }}>
+                {opts.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        {[["本文","body",7],["タグ（読点区切り）","tags",2],["担当者メモ","note",3],["良いポイント（読点区切り）","good",2]].map(([label, key, rows]) => (
+          <div key={key} style={{ marginBottom:12 }}>
+            <label style={{ display:"block", fontSize:11, color:"#888", marginBottom:4 }}>{label}</label>
+            <textarea rows={rows} value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))}
+              style={{ width:"100%", padding:"8px 10px", border:"1px solid #e0e0e0", borderRadius:7, fontSize:13, resize:"vertical", lineHeight:1.7, boxSizing:"border-box", fontFamily:"inherit", outline:"none" }} />
+          </div>
+        ))}
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:10 }}>
+          <button onClick={onClose} disabled={saving} style={{ background:"none", border:"1px solid #ddd", borderRadius:7, padding:"9px 18px", fontSize:13, cursor:"pointer", color:"#555" }}>キャンセル</button>
+          <button onClick={onSave} disabled={saving} style={{ background: saving?"#aaa":"#1a1a1a", color:"#fff", border:"none", borderRadius:7, padding:"9px 18px", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+            {saving ? "保存中..." : "保存する"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
