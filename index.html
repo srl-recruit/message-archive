@@ -19,7 +19,7 @@ input,select,textarea,button{font-family:inherit}
 const { useState, useMemo, useEffect } = React;
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyvAmBjr-cp_F3hTTkeviJPJZdkqGVnV-Dx8pmxMU6BFGBWIUtbuGnfzktCNTGJWEhuEA/exec';
 
-const PHASE_ORDER = ["説明会案内","インターン案内","インターン直前","インターン中","インターン後フォロー","早期選考案内","選考前面談","リマインド","一次選考結果","二次選考結果","最終選考後","内定通知","内定後フォロー","内定承諾後","入社前フォロー"];
+const PHASE_ORDER = ["説明会案内","選考案内","インターン案内","インターン直前","インターン中","インターン後フォロー","早期選考案内","選考前面談","リマインド","一次選考結果","二次選考結果","最終選考後","内定通知","内定後フォロー","内定承諾後","入社前フォロー"];
 const TAG_COLORS = ["#e8425a","#e86842","#e8a442","#5cb85c","#42a8e8","#7b5ea7","#e84295","#42c8c8","#a87b5e","#5e7ba8","#c8a842","#5ea87b","#a8425e","#427ba8","#7ba842"];
 function tagColor(tag) { let h=0; for(let i=0;i<tag.length;i++) h=(h*31+tag.charCodeAt(i))&0xffff; return TAG_COLORS[h%TAG_COLORS.length]; }
 
